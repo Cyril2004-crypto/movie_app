@@ -43,6 +43,11 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Popular Movies'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.bookmarks),
+            tooltip: 'Favorites',
+            onPressed: () => Navigator.pushNamed(context, '/favorites'),
+          ),
           if (auth.isLoggedIn)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),

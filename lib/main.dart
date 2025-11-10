@@ -7,6 +7,7 @@ import 'providers/auth_provider.dart';
 import 'providers/movie_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/favorites_screen.dart'; // add this import
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,6 +34,9 @@ class MyApp extends StatelessWidget {
           title: 'Movie App',
           theme: ThemeData(primarySwatch: Colors.blue),
           home: auth.isLoggedIn ? const HomeScreen() : const LoginScreen(),
+          routes: {
+            '/favorites': (_) => const FavoritesScreen(),
+          },
         ),
       ),
     );
