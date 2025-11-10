@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'services/api_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/movie_provider.dart';
+import 'providers/connectivity_provider.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/favorites_screen.dart'; // add this import
@@ -15,6 +16,7 @@ Future<void> main() async {
   await Hive.initFlutter();
   await Hive.openBox('favorites');
   await Hive.openBox('user'); // for auth
+  await Hive.openBox('cache'); // <-- open cache box
   runApp(const MyApp());
 }
 
@@ -27,6 +29,7 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => MovieProvider(apiService: api)),
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()), // <-- added
       ],
       child: Consumer<AuthProvider>(
         builder: (context, auth, _) => MaterialApp(

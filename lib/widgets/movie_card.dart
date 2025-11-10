@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
+import 'package:shimmer/shimmer.dart';
 import '../models/movie.dart';
 import '../providers/movie_provider.dart';
 
@@ -29,7 +30,11 @@ class MovieCard extends StatelessWidget {
                           imageUrl: imageUrl,
                           fit: BoxFit.cover,
                           width: double.infinity,
-                          placeholder: (c, s) => const Center(child: CircularProgressIndicator()),
+                          placeholder: (c, s) => Shimmer.fromColors(
+                            baseColor: Colors.grey.shade300,
+                            highlightColor: Colors.grey.shade100,
+                            child: Container(color: Colors.white),
+                          ),
                           errorWidget: (c, s, e) => const Center(child: Icon(Icons.broken_image)),
                         ),
                       )
@@ -37,7 +42,11 @@ class MovieCard extends StatelessWidget {
                         imageUrl: imageUrl,
                         fit: BoxFit.cover,
                         width: double.infinity,
-                        placeholder: (c, s) => const Center(child: CircularProgressIndicator()),
+                        placeholder: (c, s) => Shimmer.fromColors(
+                          baseColor: Colors.grey.shade300,
+                          highlightColor: Colors.grey.shade100,
+                          child: Container(color: Colors.white),
+                        ),
                         errorWidget: (c, s, e) => const Center(child: Icon(Icons.broken_image)),
                       )
                 : const Center(child: Icon(Icons.broken_image)),
