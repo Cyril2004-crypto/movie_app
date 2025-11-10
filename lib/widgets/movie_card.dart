@@ -6,15 +6,14 @@ import '../providers/movie_provider.dart';
 
 class MovieCard extends StatelessWidget {
   final Movie movie;
-  const MovieCard({super.key, required this.movie});
+  final String? heroTag;
+  const MovieCard({super.key, required this.movie, this.heroTag});
 
   @override
   Widget build(BuildContext context) {
     final prov = context.watch<MovieProvider>();
     final isFav = prov.isFavorite(movie.id);
-    final imageUrl = movie.posterPath != null
-        ? 'https://image.tmdb.org/t/p/w500${movie.posterPath}'
-        : null;
+    final imageUrl = movie.posterPath != null ? 'https://image.tmdb.org/t/p/w500${movie.posterPath}' : null;
 
     return Card(
       clipBehavior: Clip.hardEdge,
@@ -23,23 +22,29 @@ class MovieCard extends StatelessWidget {
         children: [
           Expanded(
             child: imageUrl != null
-                ? CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    placeholder: (c, s) => const Center(child: CircularProgressIndicator()),
-                    errorWidget: (c, s, e) => const Center(child: Icon(Icons.broken_image)),
-                  )
+                ? heroTag != null
+                    ? Hero(
+                        tag: heroTag!,
+                        child: CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          placeholder: (c, s) => const Center(child: CircularProgressIndicator()),
+                          errorWidget: (c, s, e) => const Center(child: Icon(Icons.broken_image)),
+                        ),
+                      )
+                    : CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        placeholder: (c, s) => const Center(child: CircularProgressIndicator()),
+                        errorWidget: (c, s, e) => const Center(child: Icon(Icons.broken_image)),
+                      )
                 : const Center(child: Icon(Icons.broken_image)),
           ),
           Padding(
             padding: const EdgeInsets.all(8.0),
-            child: Text(
-              movie.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
+            child: Text(movie.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold)),
           ),
           Row(
             children: [
@@ -47,16 +52,8 @@ class MovieCard extends StatelessWidget {
                 onPressed: () => prov.toggleFavorite(movie.id),
                 icon: Icon(isFav ? Icons.favorite : Icons.favorite_border, color: isFav ? Colors.red : null),
               ),
-              Expanded(
-                child: Text(
-                  movie.releaseDate ?? '',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: Text(movie.voteAverage.toString()),
-              ),
+              Expanded(child: Text(movie.releaseDate ?? '', style: const TextStyle(fontSize: 12))),
+              Padding(padding: const EdgeInsets.only(right: 8.0), child: Text(movie.voteAverage.toString())),
             ],
           )
         ],
