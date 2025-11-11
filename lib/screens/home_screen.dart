@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/movie_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart'; // added import
 import '../providers/connectivity_provider.dart';
 import '../widgets/movie_card.dart';
 import 'movie_details_screen.dart';
@@ -39,16 +40,18 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final prov = context.watch<MovieProvider>();
     final auth = context.watch<AuthProvider>();
+    final themeProv = context.watch<ThemeProvider>(); // watch theme provider
     final conn = context.watch<ConnectivityProvider>();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Popular Movies'),
         actions: [
+          // Theme toggle button: taps toggle light/dark
           IconButton(
-            icon: const Icon(Icons.bookmarks),
-            tooltip: 'Favorites',
-            onPressed: () => Navigator.pushNamed(context, '/favorites'),
+            tooltip: 'Toggle theme',
+            icon: Icon(themeProv.isDark ? Icons.dark_mode : Icons.light_mode),
+            onPressed: () => context.read<ThemeProvider>().toggleDark(),
           ),
           if (auth.isLoggedIn)
             Padding(
@@ -59,6 +62,11 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () => context.read<AuthProvider>().logout(),
             tooltip: 'Logout',
+          ),
+          IconButton(
+            icon: const Icon(Icons.bookmarks),
+            tooltip: 'Favorites',
+            onPressed: () => Navigator.pushNamed(context, '/favorites'),
           ),
         ],
         bottom: PreferredSize(

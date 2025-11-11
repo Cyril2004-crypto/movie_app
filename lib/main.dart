@@ -6,6 +6,7 @@ import 'services/api_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/movie_provider.dart';
 import 'providers/connectivity_provider.dart';
+import 'providers/theme_provider.dart'; // added
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/favorites_screen.dart'; // add this import
@@ -17,6 +18,7 @@ Future<void> main() async {
   await Hive.openBox('favorites');
   await Hive.openBox('user'); // for auth
   await Hive.openBox('cache'); // <-- open cache box
+  await Hive.openBox('settings'); // <-- open settings box for theme
   runApp(const MyApp());
 }
 
@@ -29,13 +31,17 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => MovieProvider(apiService: api)),
-        ChangeNotifierProvider(create: (_) => ConnectivityProvider()), // <-- added
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()), // theme provider
       ],
-      child: Consumer<AuthProvider>(
-        builder: (context, auth, _) => MaterialApp(
+      // use both Auth and Theme providers to configure the app
+      child: Consumer2<AuthProvider, ThemeProvider>(
+        builder: (context, auth, themeProv, _) => MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Movie App',
-          theme: ThemeData(primarySwatch: Colors.blue),
+          theme: ThemeData.light().copyWith(primaryColor: Colors.blue),
+          darkTheme: ThemeData.dark().copyWith(primaryColor: Colors.blue),
+          themeMode: themeProv.mode,
           home: auth.isLoggedIn ? const HomeScreen() : const LoginScreen(),
           routes: {
             '/favorites': (_) => const FavoritesScreen(),
