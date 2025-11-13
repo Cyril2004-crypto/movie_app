@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
+import '../widgets/trailer_player.dart';
+import '../widgets/cast_tile.dart';
 
 class MovieDetailsScreen extends StatefulWidget {
   final int movieId;
@@ -15,6 +17,8 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
   final ApiService _api = ApiService();
   Map<String, dynamic>? _details;
   List<Map<String, dynamic>> _videos = [];
+  List<Map<String, dynamic>> _credits = [];
+  List<Map<String, dynamic>> _recommendations = [];
   bool _loading = true;
   String? _error;
 
@@ -25,27 +29,70 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
   }
 
   Future<void> _load() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
       final det = await _api.getMovieDetails(widget.movieId);
       final vids = await _api.getMovieVideos(widget.movieId);
-      setState(() { _details = det; _videos = vids; });
+      final creds = await _api.getMovieCredits(widget.movieId);
+      final recs = await _api.getMovieRecommendations(widget.movieId);
+      setState(() {
+        _details = det;
+        _videos = vids;
+        _credits = creds;
+        _recommendations = recs;
+      });
     } catch (e) {
-      setState(() { _error = e.toString(); });
+      setState(() {
+        _error = e.toString();
+      });
     } finally {
-      setState(() { _loading = false; });
+      setState(() {
+        _loading = false;
+      });
     }
   }
 
   Future<void> _openTrailer() async {
-    // find first youtube trailer
     final yt = _videos.firstWhere((v) => v['site'] == 'YouTube' && v['type'] == 'Trailer', orElse: () => {});
     final key = yt['key'];
-    if (key == null) return;
-    final url = Uri.parse('https://www.youtube.com/watch?v=$key');
-    if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open trailer')));
-    }
+    if (key == null || (key as String).isEmpty) return;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.black,
+      builder: (_) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(context).size.width * 9 / 16 + 80,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: () => Navigator.pop(context)),
+              ]),
+              Expanded(child: TrailerPlayer(videoKey: key as String)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openDetailsAnimated(int movieId) {
+    Navigator.of(context).push(PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 420),
+      pageBuilder: (context, anim, sec) => FadeTransition(opacity: anim, child: MovieDetailsScreen(movieId: movieId, heroTag: 'poster_$movieId')),
+      transitionsBuilder: (context, anim, sec, child) {
+        final tween = Tween(begin: 0.95, end: 1.0).chain(CurveTween(curve: Curves.easeOut));
+        return FadeTransition(
+          opacity: anim,
+          child: ScaleTransition(scale: anim.drive(tween), child: child),
+        );
+      },
+    ));
   }
 
   @override
@@ -84,6 +131,50 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
                     icon: const Icon(Icons.play_arrow),
                     label: const Text('Watch Trailer'),
                   ),
+                  const SizedBox(height: 18),
+                  if (_credits.isNotEmpty) ...[
+                    const Text('Cast', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 150,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _credits.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 8),
+                        itemBuilder: (ctx, i) => CastTile(cast: _credits[i]),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_recommendations.isNotEmpty) ...[
+                    const Text('Recommendations', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 260,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        itemCount: _recommendations.length,
+                        itemBuilder: (ctx, i) {
+                          final rec = _recommendations[i];
+                          final poster = rec['poster_path'] != null ? 'https://image.tmdb.org/t/p/w300${rec['poster_path']}' : null;
+                          return GestureDetector(
+                            onTap: () => _openDetailsAnimated(rec['id'] as int),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Hero(tag: 'poster_${rec['id']}', child: poster != null ? Image.network(poster, width: 140, height: 200, fit: BoxFit.cover) : Container(width: 140, height: 200, color: Colors.grey.shade300)),
+                                const SizedBox(height: 8),
+                                SizedBox(width: 140, child: Text(rec['title'] as String? ?? '', maxLines: 2, overflow: TextOverflow.ellipsis)),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

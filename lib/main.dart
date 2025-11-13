@@ -10,14 +10,16 @@ import 'providers/theme_provider.dart'; // added
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/favorites_screen.dart'; // add this import
+import 'screens/watchlist_screen.dart'; // <-- add import for WatchlistScreen
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: 'assets/.env'); // ensure env is accessible as asset
   await Hive.initFlutter();
   await Hive.openBox('favorites');
-  await Hive.openBox('user'); // for auth
-  await Hive.openBox('cache'); // <-- open cache box
+  await Hive.openBox('user');
+  await Hive.openBox('cache');
+  await Hive.openBox('watchlist'); // <-- add this
   await Hive.openBox('settings'); // <-- open settings box for theme
   runApp(const MyApp());
 }
@@ -45,6 +47,7 @@ class MyApp extends StatelessWidget {
           home: auth.isLoggedIn ? const HomeScreen() : const LoginScreen(),
           routes: {
             '/favorites': (_) => const FavoritesScreen(),
+            '/watchlist': (_) => const WatchlistScreen(), // add import and route
           },
         ),
       ),

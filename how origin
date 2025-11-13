@@ -1,0 +1,5 @@
+[33m31b4fbd[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31morigin/main[m[33m)[m Add ThemeProvider, wire theme in main, update HomeScreen (theme toggle)
+[33m8fea8b8[m[33m ([m[1;31morigin/master[m[33m)[m Update UI: movie card shimmer; add caching, connectivity, favorites UI
+[33maa9ae8c[m Add favorites screen, notes & ratings (Hive) and wire providers
+[33ma887449[m Add virtual identity (login) + movie details, search, pagination, pull-to-refresh; keep .env out of repo
+[33m3742f2e[m Add movie app scaffold and assets; keep .env out of repo

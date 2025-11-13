@@ -91,4 +91,69 @@ class ApiService {
     await _cache.setCache(key, results, ttlSeconds: 86400);
     return results.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
+
+  Future<List<Map<String, dynamic>>> getMovieCredits(int id, {bool forceRefresh = false}) async {
+    final path = '/movie/$id/credits';
+    final qp = {'api_key': _apiKey(), 'language': 'en-US'};
+    final key = _cacheKey(path, qp);
+
+    if (!forceRefresh) {
+      final cached = _cache.getCache(key);
+      if (cached != null) return (cached as List).cast<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+
+    final res = await _dio.get('$_baseUrl$path', queryParameters: qp);
+    final results = (res.data['cast'] as List<dynamic>? ?? <dynamic>[]);
+    await _cache.setCache(key, results, ttlSeconds: 86400);
+    return results.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> getMovieRecommendations(int id, {int page = 1, bool forceRefresh = false}) async {
+    final path = '/movie/$id/recommendations';
+    final qp = {'api_key': _apiKey(), 'language': 'en-US', 'page': page};
+    final key = _cacheKey(path, qp);
+
+    if (!forceRefresh) {
+      final cached = _cache.getCache(key);
+      if (cached != null) return (cached as List).cast<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+
+    final res = await _dio.get('$_baseUrl$path', queryParameters: qp);
+    final results = (res.data['results'] as List<dynamic>? ?? <dynamic>[]);
+    await _cache.setCache(key, results, ttlSeconds: 3600);
+    return results.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  // person details
+  Future<Map<String, dynamic>> getPersonDetails(int id, {bool forceRefresh = false}) async {
+    final path = '/person/$id';
+    final qp = {'api_key': _apiKey(), 'language': 'en-US'};
+    final key = _cacheKey(path, qp);
+
+    if (!forceRefresh) {
+      final cached = _cache.getCache(key);
+      if (cached != null) return Map<String, dynamic>.from(cached as Map);
+    }
+
+    final res = await _dio.get('$_baseUrl$path', queryParameters: qp);
+    await _cache.setCache(key, Map<String, dynamic>.from(res.data as Map), ttlSeconds: 86400);
+    return Map<String, dynamic>.from(res.data as Map);
+  }
+
+  // person movie credits
+  Future<List<Map<String, dynamic>>> getPersonMovieCredits(int id, {bool forceRefresh = false}) async {
+    final path = '/person/$id/movie_credits';
+    final qp = {'api_key': _apiKey(), 'language': 'en-US'};
+    final key = _cacheKey(path, qp);
+
+    if (!forceRefresh) {
+      final cached = _cache.getCache(key);
+      if (cached != null) return (cached as List).cast<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+
+    final res = await _dio.get('$_baseUrl$path', queryParameters: qp);
+    final results = (res.data['cast'] as List<dynamic>? ?? <dynamic>[]);
+    await _cache.setCache(key, results, ttlSeconds: 86400);
+    return results.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
 }

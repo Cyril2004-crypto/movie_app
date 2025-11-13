@@ -6,6 +6,8 @@ import '../providers/theme_provider.dart'; // added import
 import '../providers/connectivity_provider.dart';
 import '../widgets/movie_card.dart';
 import 'movie_details_screen.dart';
+import '../screens/watchlist_screen.dart';
+import '../screens/person_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -40,19 +42,69 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final prov = context.watch<MovieProvider>();
     final auth = context.watch<AuthProvider>();
-    final themeProv = context.watch<ThemeProvider>(); // watch theme provider
+    final themeProv = context.watch<ThemeProvider>();
     final conn = context.watch<ConnectivityProvider>();
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Popular Movies'),
         actions: [
-          // Theme toggle button: taps toggle light/dark
+          // Theme toggle
           IconButton(
             tooltip: 'Toggle theme',
             icon: Icon(themeProv.isDark ? Icons.dark_mode : Icons.light_mode),
             onPressed: () => context.read<ThemeProvider>().toggleDark(),
           ),
+
+          // Watchlist button (navigates to watchlist screen)
+          IconButton(
+            tooltip: 'Watchlist',
+            icon: const Icon(Icons.bookmark_outline),
+            onPressed: () => Navigator.pushNamed(context, '/watchlist'),
+          ),
+
+          // Person / Actor quick open (asks for ID then opens PersonScreen)
+          IconButton(
+            tooltip: 'Open person by ID',
+            icon: const Icon(Icons.person_search),
+            onPressed: () async {
+              final idStr = await showDialog<String?>(
+                context: context,
+                builder: (ctx) {
+                  final ctrl = TextEditingController();
+                  return AlertDialog(
+                    title: const Text('Open Person'),
+                    content: TextField(
+                      controller: ctrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(hintText: 'Enter person ID (e.g. 287)'),
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
+                      TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Open')),
+                    ],
+                  );
+                },
+              );
+
+              if (idStr != null && idStr.isNotEmpty) {
+                final id = int.tryParse(idStr);
+                if (id != null) {
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => PersonScreen(personId: id)));
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid person id')));
+                }
+              }
+            },
+          ),
+
+          // Favorites (existing)
+          IconButton(
+            tooltip: 'Favorites',
+            icon: const Icon(Icons.bookmarks),
+            onPressed: () => Navigator.pushNamed(context, '/favorites'),
+          ),
+
           if (auth.isLoggedIn)
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -62,11 +114,6 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () => context.read<AuthProvider>().logout(),
             tooltip: 'Logout',
-          ),
-          IconButton(
-            icon: const Icon(Icons.bookmarks),
-            tooltip: 'Favorites',
-            onPressed: () => Navigator.pushNamed(context, '/favorites'),
           ),
         ],
         bottom: PreferredSize(
