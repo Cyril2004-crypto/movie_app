@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../services/api_service.dart';
+import '../widgets/cast_tile.dart';
 
 class MovieDetailsScreen extends StatefulWidget {
   final int movieId;
@@ -117,6 +118,26 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 20),
+                  // Cast section
+                  if (_credits.isNotEmpty) ...[
+                    const Text('Cast', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 120,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        itemCount: _credits.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        itemBuilder: (ctx, i) {
+                          final c = _credits[i];
+                          return CastTile(cast: c);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                 ],
               ),
             ),
