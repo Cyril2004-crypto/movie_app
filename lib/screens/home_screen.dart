@@ -88,6 +88,11 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () => context.read<AuthProvider>().logout(),
             tooltip: 'Logout',
           ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.pushNamed(context, '/settings'),
+          ),
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(56),

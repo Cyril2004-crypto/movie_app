@@ -86,6 +86,8 @@ class _MovieDetailsScreenState extends State<MovieDetailsScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
       body: SingleChildScrollView(
+        // add bottom padding to avoid tiny bottom overflow on some screens
+        padding: const EdgeInsets.only(bottom: 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
