@@ -8,6 +8,7 @@ import '../widgets/movie_card.dart';
 import 'movie_details_screen.dart';
 import '../screens/watchlist_screen.dart';
 import '../screens/person_screen.dart';
+import 'person_search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -65,37 +66,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Person / Actor quick open (asks for ID then opens PersonScreen)
           IconButton(
-            tooltip: 'Open person by ID',
+            tooltip: 'Search people',
             icon: const Icon(Icons.person_search),
-            onPressed: () async {
-              final idStr = await showDialog<String?>(
-                context: context,
-                builder: (ctx) {
-                  final ctrl = TextEditingController();
-                  return AlertDialog(
-                    title: const Text('Open Person'),
-                    content: TextField(
-                      controller: ctrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(hintText: 'Enter person ID (e.g. 287)'),
-                    ),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Cancel')),
-                      TextButton(onPressed: () => Navigator.pop(ctx, ctrl.text.trim()), child: const Text('Open')),
-                    ],
-                  );
-                },
-              );
-
-              if (idStr != null && idStr.isNotEmpty) {
-                final id = int.tryParse(idStr);
-                if (id != null) {
-                  Navigator.push(context, MaterialPageRoute(builder: (_) => PersonScreen(personId: id)));
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid person id')));
-                }
-              }
-            },
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonSearchScreen())),
           ),
 
           // Favorites (existing)

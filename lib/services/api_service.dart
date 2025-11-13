@@ -156,4 +156,13 @@ class ApiService {
     await _cache.setCache(key, results, ttlSeconds: 86400);
     return results.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
+
+  // search people
+  Future<List<Map<String, dynamic>>> searchPeople(String query, {int page = 1}) async {
+    final path = '/search/person';
+    final qp = {'api_key': _apiKey(), 'language': 'en-US', 'query': query, 'page': page, 'include_adult': 'false'};
+    final res = await _dio.get('$_baseUrl$path', queryParameters: qp);
+    final results = (res.data['results'] as List<dynamic>? ?? <dynamic>[]);
+    return results.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
 }
