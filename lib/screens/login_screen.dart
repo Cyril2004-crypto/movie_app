@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import 'home_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,6 +25,13 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _loading = true);
     await context.read<AuthProvider>().login(username);
     setState(() => _loading = false);
+
+    if (!mounted) return;
+    // replace the login route with HomeScreen so user lands on home
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+    );
   }
 
   @override

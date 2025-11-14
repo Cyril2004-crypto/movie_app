@@ -8,7 +8,7 @@ import 'providers/movie_provider.dart';
 import 'providers/connectivity_provider.dart';
 import 'providers/theme_provider.dart'; // added
 import 'screens/home_screen.dart';
-import 'screens/login_screen.dart';
+import 'screens/login_screen.dart'; // add this import
 import 'screens/favorites_screen.dart'; // add this import
 import 'screens/watchlist_screen.dart'; // <-- add import for WatchlistScreen
 import 'screens/settings_screen.dart'; // <-- import SettingsScreen
@@ -37,7 +37,6 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()), // theme provider
       ],
-      // use both Auth and Theme providers to configure the app
       child: Consumer2<AuthProvider, ThemeProvider>(
         builder: (context, auth, themeProv, _) => MaterialApp(
           debugShowCheckedModeBanner: false,
@@ -47,6 +46,8 @@ class MyApp extends StatelessWidget {
           themeMode: themeProv.mode,
           home: auth.isLoggedIn ? const HomeScreen() : const LoginScreen(),
           routes: {
+            '/login': (_) => const LoginScreen(),
+            '/settings': (context) => const SettingsScreen(),
             '/favorites': (_) => const FavoritesScreen(),
             '/watchlist': (_) => const WatchlistScreen(), // add import and route
             '/settings': (context) => const SettingsScreen(), // <-- add settings route

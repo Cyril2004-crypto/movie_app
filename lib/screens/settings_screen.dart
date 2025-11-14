@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:hive/hive.dart';
 import 'package:flutter/painting.dart'; // for image cache clearing
+import '../providers/theme_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -11,23 +13,12 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late final Box _settingsBox;
-  bool _darkTheme = false;
-  String _language = 'English';
   bool _busy = false;
 
   @override
   void initState() {
     super.initState();
     _settingsBox = Hive.box('settings');
-    _darkTheme = (_settingsBox.get('theme', defaultValue: 'light') as String) == 'dark';
-    _language = (_settingsBox.get('language', defaultValue: 'English') as String);
-  }
-
-  Future<void> _setTheme(bool dark) async {
-    setState(() => _darkTheme = dark);
-    await _settingsBox.put('theme', dark ? 'dark' : 'light');
-    // Note: to apply theme app-wide you'll need to read this setting in your top-level widget
-    // and rebuild MaterialApp with the selected ThemeMode (Provider / Riverpod / setState at top).
   }
 
   Future<void> _pickLanguage() async {
@@ -43,8 +34,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
     if (selected != null) {
-      setState(() => _language = selected);
       await _settingsBox.put('language', selected);
+      // optional: inform ThemeProvider or other listeners if needed
+      if (mounted) setState(() {});
     }
   }
 
@@ -64,37 +56,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _busy = true);
     try {
-      // clear watchlist (if present)
       if (Hive.isBoxOpen('watchlist')) {
         final box = Hive.box('watchlist');
         await box.clear();
       }
-      // clear other app boxes if desired
-      // clear image cache
       PaintingBinding.instance.imageCache.clear();
       PaintingBinding.instance.imageCache.clearLiveImages();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cache cleared')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cache cleared')));
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to clear cache: $e')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to clear cache: $e')));
     } finally {
-      setState(() => _busy = false);
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _signIn() async {
-    // Placeholder sign-in flow
-    await showDialog<void>(
-      context: context,
-      builder: (c) => AlertDialog(
-        title: const Text('Sign in'),
-        content: const Text('Sign-in not implemented yet.'),
-        actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('OK'))],
-      ),
-    );
+    // navigate to the app's Login screen (uses the '/login' route in main.dart)
+    await Navigator.pushNamed(context, '/login');
   }
 
   @override
   Widget build(BuildContext context) {
+    final themeProv = context.watch<ThemeProvider>();
+    final language = (_settingsBox.get('language', defaultValue: 'English') as String);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: AbsorbPointer(
@@ -105,12 +90,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SwitchListTile(
               title: const Text('Dark theme'),
               subtitle: const Text('Toggle light / dark appearance'),
-              value: _darkTheme,
-              onChanged: _setTheme,
+              value: themeProv.isDark,
+              onChanged: (_) => context.read<ThemeProvider>().toggleDark(),
             ),
             ListTile(
               title: const Text('Language'),
-              subtitle: Text(_language),
+              subtitle: Text(language),
               trailing: const Icon(Icons.chevron_right),
               onTap: _pickLanguage,
             ),
