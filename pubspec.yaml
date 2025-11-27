@@ -39,10 +39,19 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   url_launcher: ^6.1.10
-  rxdart: ^0.28.0
+  rxdart: ^0.27.7
   connectivity_plus: ^4.0.2
   shimmer: ^2.0.0
   youtube_player_iframe: ^5.2.2
+
+  # Social sign-in (client SDKs; platform setup required)
+  google_sign_in: ^6.1.0
+  sign_in_with_apple: ^4.0.0
+  flutter_facebook_auth: ^5.0.0
+
+  # Optional: secure local token storage (recommended for production)
+  flutter_secure_storage: ^8.0.0
+  crypto: ^3.0.2
 
 dev_dependencies:
   flutter_test:

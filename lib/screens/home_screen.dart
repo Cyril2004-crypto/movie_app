@@ -66,9 +66,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Person / Actor quick open (asks for ID then opens PersonScreen)
           IconButton(
+            icon: const Icon(Icons.search),
             tooltip: 'Search people',
-            icon: const Icon(Icons.person_search),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonSearchScreen())),
+          ),
+          IconButton(
+            icon: const Icon(Icons.explore),
+            tooltip: 'Explore',
+            onPressed: () => Navigator.pushNamed(context, '/explore'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.person),
+            tooltip: 'Profile',
+            onPressed: () => Navigator.pushNamed(context, '/profile'),
           ),
 
           // Favorites (existing)

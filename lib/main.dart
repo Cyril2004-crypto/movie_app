@@ -12,6 +12,8 @@ import 'screens/login_screen.dart'; // add this import
 import 'screens/favorites_screen.dart'; // add this import
 import 'screens/watchlist_screen.dart'; // <-- add import for WatchlistScreen
 import 'screens/settings_screen.dart'; // <-- import SettingsScreen
+import 'screens/profile_screen.dart'; // <-- import ProfileScreen
+import 'screens/explore_screen.dart'; // <-- import ExploreScreen
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,6 +53,8 @@ class MyApp extends StatelessWidget {
             '/favorites': (_) => const FavoritesScreen(),
             '/watchlist': (_) => const WatchlistScreen(), // add import and route
             '/settings': (context) => const SettingsScreen(), // <-- add settings route
+            '/profile': (_) => const ProfileScreen(),
+            '/explore': (_) => const ExploreScreen(),
           },
         ),
       ),

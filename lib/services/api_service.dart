@@ -165,4 +165,33 @@ class ApiService {
     final results = (res.data['results'] as List<dynamic>? ?? <dynamic>[]);
     return results.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
+
+  /// Fetch movies for a genre using TMDB-like discover endpoint.
+  /// Returns a List of Movie objects.
+  Future<List<Movie>> discoverByGenre(int genreId, {int page = 1, bool forceRefresh = false}) async {
+    final path = '/discover/movie';
+    final qp = {
+      'api_key': _apiKey(),
+      'language': 'en-US',
+      'with_genres': genreId.toString(),
+      'page': page,
+      'include_adult': false,
+    };
+    final key = _cacheKey(path, qp);
+
+    if (!forceRefresh) {
+      final cached = _cache.getCache(key);
+      if (cached != null) {
+        final results = (cached as List).cast<Map>().map((e) => Movie.fromJson(Map<String, dynamic>.from(e))).toList();
+        return results;
+      }
+    }
+
+    final resp = await _dio.get('$_baseUrl$path', queryParameters: qp);
+    final data = resp.data;
+    if (data == null) return <Movie>[];
+    final results = (data['results'] as List<dynamic>? ?? <dynamic>[]);
+    await _cache.setCache(key, results, ttlSeconds: 3600);
+    return results.map((e) => Movie.fromJson(Map<String, dynamic>.from(e as Map))).toList();
+  }
 }
