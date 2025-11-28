@@ -10,28 +10,43 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _controller = TextEditingController();
+  final _userCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   bool _loading = false;
 
   @override
   void dispose() {
-    _controller.dispose();
+    _userCtrl.dispose();
+    _passCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    final username = _controller.text.trim();
-    if (username.isEmpty) return;
+  Future<void> _signIn() async {
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
-    await context.read<AuthProvider>().login(username);
+    final ok = await context.read<AuthProvider>().loginWithPassword(_userCtrl.text.trim(), _passCtrl.text);
     setState(() => _loading = false);
+    if (ok) {
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign in failed: invalid credentials')));
+    }
+  }
 
-    if (!mounted) return;
-    // replace the login route with HomeScreen so user lands on home
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _loading = true);
+    final ok = await context.read<AuthProvider>().register(_userCtrl.text.trim(), _passCtrl.text);
+    setState(() => _loading = false);
+    if (ok) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registered and signed in')));
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registration failed: username taken')));
+    }
   }
 
   @override
@@ -40,20 +55,48 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(title: const Text('Sign in')),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Text('Enter a username to continue', style: TextStyle(fontSize: 16)),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _controller,
-              decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder()),
-            ),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: _loading ? null : _submit,
-              child: _loading ? const CircularProgressIndicator() : const Text('Continue'),
-            ),
-          ],
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              const Text('Enter username and password to continue', style: TextStyle(fontSize: 16)),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _userCtrl,
+                decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder()),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Enter username' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _passCtrl,
+                decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()),
+                obscureText: true,
+                validator: (v) => v == null || v.isEmpty ? 'Enter password' : (v.length < 6 ? 'Min 6 chars' : null),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: _loading ? null : _signIn,
+                    child: _loading ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Sign in'),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton(
+                    onPressed: _loading ? null : _register,
+                    child: const Text('Register'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () {
+                  Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+                },
+                child: const Text('Continue as guest'),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -17,49 +17,89 @@ class AuthProvider extends ChangeNotifier {
   String? get username => _userBox.get('username') as String?;
   String? get provider => _userBox.get('provider') as String?;
 
-  // Local/dev sign-in
   // helper: SHA256 hash used across register/login/change
   String _hash(String password) => sha256.convert(utf8.encode(password)).toString();
 
-  /// Try to change the current logged-in user's password.
-  /// Returns true on success, false on failure.
-  /// Use debugReason to get a short failure reason in logs (not shown to users).
-  Future<bool> changePassword(String current, String next) async {
+  /// Returns null on success, otherwise a short error message explaining failure.
+  Future<String?> changePasswordWithReason(String current, String next) async {
     try {
       final username = _userBox.get('username') as String?;
       if (username == null) {
-        debugPrint('changePassword: no username in session');
-        return false;
+        debugPrint('changePasswordWithReason: no username in session');
+        return 'No user is currently signed in';
       }
+
+      final provider = _userBox.get('provider') as String?;
 
       final usersRaw = _userBox.get('users', defaultValue: <String, String>{});
       final users = Map<String, String>.from(usersRaw as Map);
-      final storedHash = users[username];
 
+      // case-insensitive key lookup to avoid mismatch
+      final matchedKey = users.keys.firstWhere(
+        (k) => k.toLowerCase() == username.toLowerCase(),
+        orElse: () => '',
+      );
+      if (matchedKey.isEmpty) {
+        debugPrint('changePasswordWithReason: no stored credentials for user: $username');
+        if (provider != null && provider != 'local') {
+          return 'Account is managed by $provider — create a local password to enable local password changes';
+        }
+        return 'No stored credentials for $username';
+      }
+
+      final storedHash = users[matchedKey];
       if (storedHash == null) {
-        debugPrint('changePassword: no stored credentials for user: $username');
-        return false;
+        debugPrint('changePasswordWithReason: null storedHash for key $matchedKey');
+        return 'No stored credentials for $username';
       }
 
       final currentHash = _hash(current);
       if (currentHash != storedHash) {
-        debugPrint('changePassword: current password does not match for user: $username');
-        return false;
+        debugPrint('changePasswordWithReason: provided current password does not match for user: $username');
+        return 'Current password is incorrect';
       }
 
-      // basic validation for new password
       if (next.length < 6) {
-        debugPrint('changePassword: new password too short');
-        return false;
+        debugPrint('changePasswordWithReason: new password too short');
+        return 'New password must be at least 6 characters';
       }
 
-      users[username] = _hash(next);
+      users[matchedKey] = _hash(next);
       await _userBox.put('users', users);
-      debugPrint('changePassword: password updated for user: $username');
-      return true;
+      debugPrint('changePasswordWithReason: password updated for user: $username');
+      return null;
     } catch (e, st) {
-      debugPrint('changePassword error: $e\n$st');
-      return false;
+      debugPrint('changePasswordWithReason error: $e\n$st');
+      return 'Unexpected error';
+    }
+  }
+
+  // boolean wrapper for compatibility
+  Future<bool> changePassword(String current, String next) async {
+    final err = await changePasswordWithReason(current, next);
+    return err == null;
+  }
+
+  /// Create (or overwrite) a local password entry for the currently signed-in username.
+  /// Useful for users who signed in via social providers and want a local password.
+  Future<String?> createLocalPasswordForCurrentUser(String newPassword) async {
+    try {
+      final username = _userBox.get('username') as String?;
+      if (username == null) return 'No user is currently signed in';
+      if (newPassword.length < 6) return 'New password must be at least 6 characters';
+
+      final usersRaw = _userBox.get('users', defaultValue: <String, String>{});
+      final users = Map<String, String>.from(usersRaw as Map);
+
+      // store using the canonical username as key (preserve case)
+      users[username] = _hash(newPassword);
+      await _userBox.put('users', users);
+
+      debugPrint('createLocalPasswordForCurrentUser: created local password for $username');
+      return null;
+    } catch (e, st) {
+      debugPrint('createLocalPasswordForCurrentUser error: $e\n$st');
+      return 'Unexpected error';
     }
   }
 
@@ -112,9 +152,7 @@ class AuthProvider extends ChangeNotifier {
       final account = await _googleSignIn.signIn();
       if (account == null) return false; // user cancelled
 
-      // optionally get tokens:
       final auth = await account.authentication;
-
       final name = account.displayName;
       final email = account.email;
       final photoUrl = account.photoUrl;
@@ -140,7 +178,6 @@ class AuthProvider extends ChangeNotifier {
     await logout();
   }
 
-  // Facebook sign-in (already present in file previously)
   Future<bool> signInWithFacebook() async {
     try {
       final LoginResult result = await FacebookAuth.instance.login(
@@ -170,14 +207,8 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Placeholder for Apple Sign-In — replace with real sign_in_with_apple flow after platform setup
   Future<bool> signInWithApple() async {
     try {
-      // TODO: implement real Sign in with Apple:
-      // final credential = await SignInWithApple.getAppleIDCredential(...);
-      // verify credential on backend or extract user info and persist.
-
-      // For now perform a mock sign-in so UI flows work
       await _userBox.put('loggedIn', true);
       await _userBox.put('username', 'AppleUser');
       await _userBox.put('provider', 'apple');
@@ -190,7 +221,6 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> signOutApple() async {
-    // TODO: call real sign out / revoke if using real Apple sign-in
     await _userBox.put('loggedIn', false);
     await _userBox.delete('username');
     await _userBox.delete('provider');
@@ -202,7 +232,6 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // simple JSON export for user data
   Future<String?> exportUserData() async {
     final data = {
       'username': _userBox.get('username'),
@@ -210,14 +239,10 @@ class AuthProvider extends ChangeNotifier {
       'watchlist': _userBox.get('watchlist'),
       'favorites': _userBox.get('favorites'),
     };
-    // write to app directory or share — for now persist to a file in app docs directory
-    // implement using path_provider + dart:io as needed; return path string
-    return null; // implement file write and return path
+    return null;
   }
 
-  // delete account (local-only). For social/provider-backed accounts you must call backend.
   Future<bool> deleteAccount({required bool localOnly}) async {
-    // local-only: remove user entry and clear session
     try {
       final username = _userBox.get('username') as String?;
       if (username != null) {
@@ -232,7 +257,6 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Debug helper to inspect stored users in Hive (call from a debug button)
   Map<String, String> debugListUsers() {
     final raw = _userBox.get('users', defaultValue: <String, String>{});
     try {

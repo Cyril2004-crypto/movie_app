@@ -21,42 +21,28 @@ class _SignInScreenState extends State<SignInScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
+  Future<void> _signIn() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _submitting = true);
-
-    final username = _userCtrl.text.trim();
-    final password = _passCtrl.text;
-    final ok = await context.read<AuthProvider>().loginWithPassword(username, password);
+    final ok = await context.read<AuthProvider>().loginWithPassword(_userCtrl.text.trim(), _passCtrl.text);
     setState(() => _submitting = false);
-
     if (ok) {
-      if (mounted) Navigator.pop(context);
-      return;
+      Navigator.pushReplacementNamed(context, '/'); // adjust route if home route differs
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Sign in failed: invalid credentials')));
     }
+  }
 
-    // login failed -> show snackbar and offer to register
-    if (mounted) {
-      final register = await showDialog<bool>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: const Text('Not found or wrong password'),
-          content: const Text('No account found or wrong password. Create an account with these credentials?'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Create')),
-          ],
-        ),
-      );
-      if (register == true) {
-        setState(() => _submitting = true);
-        final created = await context.read<AuthProvider>().register(username, password);
-        setState(() => _submitting = false);
-        if (created && mounted) Navigator.pop(context);
-        if (!created && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not create account (already exists)')));
-      } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invalid credentials')));
-      }
+  Future<void> _register() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    final ok = await context.read<AuthProvider>().register(_userCtrl.text.trim(), _passCtrl.text);
+    setState(() => _submitting = false);
+    if (ok) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registered and signed in')));
+      Navigator.pushReplacementNamed(context, '/');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Registration failed: username taken')));
     }
   }
 
@@ -66,73 +52,46 @@ class _SignInScreenState extends State<SignInScreen> {
       appBar: AppBar(title: const Text('Sign in')),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Form(
-              key: _formKey,
-              child: Column(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              const Text('Enter username and password to continue', textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _userCtrl,
+                decoration: const InputDecoration(labelText: 'Username'),
+                validator: (v) => v == null || v.trim().isEmpty ? 'Enter username' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _passCtrl,
+                decoration: const InputDecoration(labelText: 'Password'),
+                obscureText: true,
+                validator: (v) => v == null || v.isEmpty ? 'Enter password' : (v.length < 6 ? 'Min 6 chars' : null),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  TextFormField(
-                    controller: _userCtrl,
-                    decoration: const InputDecoration(labelText: 'Username'),
-                    validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _passCtrl,
-                    decoration: const InputDecoration(labelText: 'Password'),
-                    obscureText: true,
-                    validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: _submitting ? null : _submit,
-                    child: _submitting ? const CircularProgressIndicator() : const Text('Continue'),
+                    onPressed: _submitting ? null : _signIn,
+                    child: _submitting ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Sign in'),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton(
+                    onPressed: _submitting ? null : _register,
+                    child: const Text('Register'),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-            // social buttons (existing)
-            OutlinedButton.icon(
-              icon: const Icon(Icons.email, size: 20),
-              label: const Text('Continue with Google'),
-              onPressed: _submitting
-                  ? null
-                  : () async {
-                      setState(() => _submitting = true);
-                      final ok = await context.read<AuthProvider>().signInWithGoogle();
-                      setState(() => _submitting = false);
-                      if (ok && mounted) Navigator.pop(context);
-                    },
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.apple, size: 20),
-              label: const Text('Continue with Apple'),
-              onPressed: _submitting
-                  ? null
-                  : () async {
-                      setState(() => _submitting = true);
-                      final ok = await context.read<AuthProvider>().signInWithApple();
-                      setState(() => _submitting = false);
-                      if (ok && mounted) Navigator.pop(context);
-                    },
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.facebook, size: 20),
-              label: const Text('Continue with Facebook'),
-              onPressed: _submitting
-                  ? null
-                  : () async {
-                      setState(() => _submitting = true);
-                      final ok = await context.read<AuthProvider>().signInWithFacebook();
-                      setState(() => _submitting = false);
-                      if (ok && mounted) Navigator.pop(context);
-                    },
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => Navigator.pushReplacementNamed(context, '/'), // fallback
+                child: const Text('Continue as guest'),
+              ),
+            ],
+          ),
         ),
       ),
     );

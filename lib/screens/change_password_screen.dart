@@ -25,10 +25,49 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _busy = true);
-    final ok = await context.read<AuthProvider>().changePassword(_cur.text, _new.text);
+
+    final reason = await context.read<AuthProvider>().changePasswordWithReason(_cur.text, _new.text);
+
     setState(() => _busy = false);
-    if (ok && mounted) Navigator.pop(context);
-    if (!ok && mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to change password')));
+
+    if (reason == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
+    // If reason says no stored credentials, offer creation of local password
+    if (reason.toLowerCase().contains('no stored credentials') || reason.toLowerCase().contains('managed by')) {
+      final create = await showDialog<bool>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: const Text('No local password found'),
+          content: const Text('This account does not have a local password. Create one now?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Create')),
+          ],
+        ),
+      );
+
+      if (create == true) {
+        // create local password using the "new password" field
+        setState(() => _busy = true);
+        final createReason = await context.read<AuthProvider>().createLocalPasswordForCurrentUser(_new.text);
+        setState(() => _busy = false);
+        if (createReason == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Local password created. You can now change it.')));
+            Navigator.pop(context);
+          }
+          return;
+        } else {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to create local password: $createReason')));
+          return;
+        }
+      }
+    }
+
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to change password: $reason')));
   }
 
   @override

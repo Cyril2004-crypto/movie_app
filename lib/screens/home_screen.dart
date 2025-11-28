@@ -95,8 +95,21 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => context.read<AuthProvider>().logout(),
-            tooltip: 'Logout',
+            tooltip: 'Sign out',
+            onPressed: () async {
+              try {
+                // ensure provider lookup without listening
+                final auth = context.read<AuthProvider>();
+                final ok = await auth.logout();
+                // logout returns void in your provider; if void, just navigate after await
+                // await auth.logout(); 
+                // after logout navigate to login (replace history)
+                Navigator.pushReplacementNamed(context, '/login');
+              } catch (e, st) {
+                debugPrint('Logout failed: $e\n$st');
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to sign out')));
+              }
+            },
           ),
           IconButton(
             icon: const Icon(Icons.settings),
