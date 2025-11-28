@@ -49,6 +49,30 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() => _loading = true);
+    final ok = await context.read<AuthProvider>().signInWithGoogle();
+    setState(() => _loading = false);
+    if (ok) {
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Google sign-in failed')));
+    }
+  }
+
+  Future<void> _signInWithApple() async {
+    setState(() => _loading = true);
+    final ok = await context.read<AuthProvider>().signInWithApple();
+    setState(() => _loading = false);
+    if (ok) {
+      if (!mounted) return;
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Apple sign-in failed')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -88,6 +112,29 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
+
+              const SizedBox(height: 12),
+
+              // Social sign-in buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.account_circle),
+                    label: const Text('Sign in with Google'),
+                    onPressed: _loading ? null : _signInWithGoogle,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.apple),
+                    label: const Text('Sign in with Apple'),
+                    onPressed: _loading ? null : _signInWithApple,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.black),
+                  ),
+                ],
+              ),
+
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () {

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import '../services/api_service.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/movie_provider.dart';
+import '../models/movie.dart';
 import 'movie_details_screen.dart';
 
 class WatchlistScreen extends StatefulWidget {
@@ -12,65 +13,109 @@ class WatchlistScreen extends StatefulWidget {
 }
 
 class _WatchlistScreenState extends State<WatchlistScreen> {
-  final ApiService _api = ApiService();
-  final Box _box = Hive.box('watchlist');
-  List<Map<String, dynamic>> _movies = [];
-  bool _loading = true;
+  bool _loading = false;
+  List<Movie> _movies = [];
 
   @override
-  void initState() {
-    super.initState();
-    _load();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadMovies();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    final ids = (_box.get('ids', defaultValue: <int>[]) as List).cast<int>();
-    final List<Map<String, dynamic>> out = [];
-    for (final id in ids) {
-      try {
-        final map = await _api.getMovieDetails(id);
-        out.add(map);
-      } catch (_) {}
+  Future<void> _loadMovies() async {
+    final auth = context.read<AuthProvider>();
+    final movieProv = context.read<MovieProvider>();
+    final ids = auth.currentWatchlist;
+    if (ids.isEmpty) {
+      setState(() {
+        _movies = [];
+        _loading = false;
+      });
+      return;
     }
+
+    setState(() => _loading = true);
+    // try resolve from provider caches first
+    final resolved = ids.map((id) => movieProv.getMovieById(id)).whereType<Movie>().toList();
+
+    // if some ids are missing, fetch details
+    final missingIds = ids.where((id) => resolved.every((m) => m.id != id)).toList();
+    if (missingIds.isNotEmpty) {
+      final fetched = await movieProv.fetchMoviesForIds(missingIds);
+      resolved.addAll(fetched);
+    }
+
     setState(() {
-      _movies = out;
+      _movies = resolved;
       _loading = false;
     });
   }
 
-  void _toggle(int id) {
-    final ids = Set<int>.from((_box.get('ids', defaultValue: <int>[]) as List).cast<int>());
-    if (ids.contains(id)) ids.remove(id); else ids.add(id);
-    _box.put('ids', ids.toList());
-    _load();
-  }
-
   @override
   Widget build(BuildContext context) {
+    final auth = context.watch<AuthProvider>();
+    final ids = auth.currentWatchlist;
+
+    // Always show AppBar so user can navigate back (even when empty)
     return Scaffold(
-      appBar: AppBar(title: const Text('Watchlist')),
+      appBar: AppBar(
+        title: const Text('Watchlist'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            // prefer simple pop, but fall back to popping until first route (home)
+            if (Navigator.canPop(context)) {
+              Navigator.pop(context);
+            } else {
+              Navigator.popUntil(context, (route) => route.isFirst);
+            }
+          },
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.home),
+            onPressed: () {
+              // ensure we return to the app root (home) regardless of stack shape
+              Navigator.popUntil(context, (route) => route.isFirst);
+            },
+          )
+        ],
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : _movies.isEmpty
-              ? const Center(child: Text('No items in your watchlist'))
+          : (ids.isEmpty && _movies.isEmpty)
+              ? const Center(child: Text('No movies in your watchlist'))
               : ListView.separated(
-                  padding: const EdgeInsets.all(8),
-                  itemCount: _movies.length,
-                  separatorBuilder: (_, __) => const Divider(),
-                  itemBuilder: (ctx, i) {
-                    final m = _movies[i];
-                    final poster = m['poster_path'] != null ? 'https://image.tmdb.org/t/p/w200${m['poster_path']}' : null;
+                  itemCount: _movies.isNotEmpty ? _movies.length : ids.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final movie = _movies.isNotEmpty ? _movies[index] : null;
+                    if (movie == null) {
+                      final id = ids[index];
+                      return ListTile(title: Text('Movie #$id'));
+                    }
                     return ListTile(
-                      leading: poster != null ? CachedNetworkImage(imageUrl: poster, width: 56, fit: BoxFit.cover) : const Icon(Icons.broken_image),
-                      title: Text(m['title'] ?? ''),
-                      subtitle: Text(m['release_date'] ?? ''),
+                      leading: movie.posterPath != null
+                          ? Image.network('https://image.tmdb.org/t/p/w92${movie.posterPath}',
+                              width: 48, fit: BoxFit.cover)
+                          : const SizedBox(width: 48),
+                      title: Text(movie.title),
+                      subtitle: Text(movie.releaseDate ?? ''),
                       trailing: IconButton(
                         icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: () => _toggle(m['id'] as int),
-                        tooltip: 'Remove from watchlist',
+                        onPressed: () async {
+                          await context.read<AuthProvider>().toggleWatchlist(movie.id);
+                          await _loadMovies();
+                        },
                       ),
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MovieDetailsScreen(movieId: m['id'] as int, heroTag: 'poster_${m['id']}'))).then((_) => _load()),
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => MovieDetailsScreen(movieId: movie.id, heroTag: 'poster_${movie.id}'),
+                          ),
+                        );
+                      },
                     );
                   },
                 ),

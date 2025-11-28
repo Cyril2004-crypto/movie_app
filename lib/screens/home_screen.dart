@@ -95,21 +95,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           IconButton(
             icon: const Icon(Icons.logout),
-            tooltip: 'Sign out',
-            onPressed: () async {
-              try {
-                // ensure provider lookup without listening
-                final auth = context.read<AuthProvider>();
-                final ok = await auth.logout();
-                // logout returns void in your provider; if void, just navigate after await
-                // await auth.logout(); 
-                // after logout navigate to login (replace history)
-                Navigator.pushReplacementNamed(context, '/login');
-              } catch (e, st) {
-                debugPrint('Logout failed: $e\n$st');
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Failed to sign out')));
-              }
-            },
+            onPressed: () => context.read<AuthProvider>().logout(),
+            tooltip: 'Logout',
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -168,13 +155,25 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   itemCount: prov.movies.length + (prov.loading ? 1 : 0),
                   itemBuilder: (context, index) {
-                    if (index >= prov.movies.length) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final movie = prov.movies[index];
+                    final movie = /* obtain movie list from your provider, e.g. */
+                        context.watch<MovieProvider>().movies[index];
+
                     return GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => MovieDetailsScreen(movieId: movie.id, heroTag: 'poster_${movie.id}'))),
-                      child: MovieCard(movie: movie, heroTag: 'poster_${movie.id}'),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => MovieDetailsScreen(
+                            movieId: movie.id,
+                            heroTag: 'poster_${movie.id}',
+                          ),
+                        ),
+                      ),
+                      child: MovieCard(
+                        movie: movie,
+                        heroTag: 'poster_${movie.id}',
+                        movieId: movie.id,
+                        title: movie.title,
+                      ),
                     );
                   },
                 ),

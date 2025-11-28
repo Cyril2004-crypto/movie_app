@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import '../models/movie.dart';
@@ -25,7 +26,76 @@ class MovieProvider extends ChangeNotifier {
   List<Movie> favoriteMovies = [];
   bool loadingFavorites = false;
 
+  // --- new: genre-specific state ---
+  List<Movie> _genreMovies = [];
+  bool _genreLoading = false;
+
+  List<Movie> get genreMovies => _genreMovies;
+  bool get genreLoading => _genreLoading;
+
   MovieProvider({required this.apiService});
+
+  // --- helper: normalize various API shapes into List<Movie> ---
+  List<Movie> _toMovieList(dynamic raw) {
+    if (raw == null) return <Movie>[];
+
+    // If it's already a List<Movie>
+    if (raw is List<Movie>) return raw;
+
+    // If it's a Map that contains a list under common keys, unwrap it
+    if (raw is Map) {
+      for (final key in ['results', 'data', 'movies', 'items']) {
+        final v = raw[key];
+        if (v is List) {
+          raw = v;
+          break;
+        }
+      }
+      // If still a Map here, and represents a single movie object, convert to list
+      if (raw is Map) {
+        // try treat map as a single movie object
+        try {
+          return [Movie.fromJson(Map<String, dynamic>.from(raw))];
+        } catch (_) {
+          return <Movie>[];
+        }
+      }
+    }
+
+    // At this point raw might be a List (of Map/Movie/other), a JSON string, or something else.
+    if (raw is String) {
+      try {
+        final parsed = jsonDecode(raw);
+        return _toMovieList(parsed);
+      } catch (_) {
+        return <Movie>[];
+      }
+    }
+
+    if (raw is List) {
+      final out = <Movie>[];
+      for (final e in raw) {
+        if (e is Movie) {
+          out.add(e);
+        } else if (e is Map) {
+          try {
+            out.add(Movie.fromJson(Map<String, dynamic>.from(e)));
+          } catch (_) {
+            // skip invalid entry
+          }
+        } else if (e is String) {
+          // sometimes items are JSON strings
+          try {
+            final parsed = jsonDecode(e);
+            if (parsed is Map) out.add(Movie.fromJson(Map<String, dynamic>.from(parsed)));
+          } catch (_) {}
+        }
+      }
+      return out;
+    }
+
+    return <Movie>[];
+  }
 
   Future<void> fetchPopularMovies({bool refresh = false}) async {
     if (loading || _loadingMore) return;
@@ -39,7 +109,8 @@ class MovieProvider extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final fetched = await apiService.fetchPopularMovies(page: _page);
+      final fetchedRaw = await apiService.fetchPopularMovies(page: _page);
+      final fetched = _toMovieList(fetchedRaw);
       if (refresh) {
         movies = fetched;
       } else {
@@ -84,7 +155,8 @@ class MovieProvider extends ChangeNotifier {
     movies = [];
     notifyListeners();
     try {
-      final results = await apiService.searchMovies(query, page: page);
+      final resultsRaw = await apiService.searchMovies(query, page: page);
+      final results = _toMovieList(resultsRaw);
       movies = results;
       _hasMore = results.isNotEmpty;
       _page = page + 1;
@@ -105,15 +177,15 @@ class MovieProvider extends ChangeNotifier {
       final List<Movie> fetched = [];
       for (final id in ids) {
         try {
-          final map = await apiService.getMovieDetails(id);
-          fetched.add(Movie.fromJson(map));
+          final res = await apiService.getMovieDetails(id);
+          final list = _toMovieList(res);
+          if (list.isNotEmpty) fetched.add(list.first);
         } catch (_) {
           // ignore single failures
         }
       }
       favoriteMovies = fetched;
     } catch (e) {
-      // keep silent, set empty list
       favoriteMovies = [];
     } finally {
       loadingFavorites = false;
@@ -121,21 +193,46 @@ class MovieProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> fetchFavoriteMoviesForIds(List<int> ids) async {
+    final List<Movie> out = [];
+    for (final id in ids) {
+      try {
+        final res = await apiService.getMovieDetails(id);
+        final list = _toMovieList(res);
+        if (list.isNotEmpty) out.add(list.first);
+      } catch (_) {}
+    }
+    favoriteMovies = out;
+    notifyListeners();
+  }
+
   Set<int> get favoriteIds {
     final raw = _favoritesBox.get('ids', defaultValue: <int>[]);
     return Set<int>.from((raw as List).cast<int>());
   }
 
-  bool isFavorite(int id) => favoriteIds.contains(id);
+  // Local guest favorites/watchlist (keeps UI functional when no user signed in)
+  final Set<int> _localFavorites = <int>{};
+  final Set<int> _localWatchlist = <int>{};
 
-  void toggleFavorite(int id) {
-    final ids = favoriteIds;
-    if (ids.contains(id)) {
-      ids.remove(id);
+  bool isFavorite(int movieId) => _localFavorites.contains(movieId);
+  bool isInWatchlist(int movieId) => _localWatchlist.contains(movieId);
+
+  void toggleFavorite(int movieId) {
+    if (_localFavorites.contains(movieId)) {
+      _localFavorites.remove(movieId);
     } else {
-      ids.add(id);
+      _localFavorites.add(movieId);
     }
-    _favoritesBox.put('ids', ids.toList());
+    notifyListeners();
+  }
+
+  void toggleWatchlist(int movieId) {
+    if (_localWatchlist.contains(movieId)) {
+      _localWatchlist.remove(movieId);
+    } else {
+      _localWatchlist.add(movieId);
+    }
     notifyListeners();
   }
 
@@ -195,5 +292,61 @@ class MovieProvider extends ChangeNotifier {
     }
     await _favoritesBox.put('notes', notes);
     notifyListeners();
+  }
+
+  /// Load movies for a given genre id (accepts int or String).
+  Future<void> loadGenreMovies(dynamic genreIdParam) async {
+    final int genreId = genreIdParam is int
+        ? genreIdParam
+        : (genreIdParam is String ? int.tryParse(genreIdParam) ?? 0 : 0);
+
+    if (genreId == 0) {
+      debugPrint('loadGenreMovies: invalid genreIdParam="$genreIdParam" -> genreId=0');
+      _genreMovies = [];
+      _genreLoading = false;
+      notifyListeners();
+      return;
+    }
+
+    _genreLoading = true;
+    notifyListeners();
+
+    try {
+      final result = await apiService.discoverByGenre(genreId);
+      debugPrint('loadGenreMovies: raw result type=${result.runtimeType} value=$result');
+
+      // Delegate all normalization to _toMovieList (it is defensive)
+      final normalized = _toMovieList(result);
+      _genreMovies = normalized;
+      debugPrint('loadGenreMovies: normalized.count=${_genreMovies.length}');
+    } catch (e, st) {
+      debugPrint('loadGenreMovies error: $e\n$st');
+      _genreMovies = [];
+    } finally {
+      _genreLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Movie? getMovieById(int id) {
+    try { return favoriteMovies.firstWhere((m) => m.id == id); } catch (_) {}
+    try { return movies.firstWhere((m) => m.id == id); } catch (_) {}
+    try { return _genreMovies.firstWhere((m) => m.id == id); } catch (_) {}
+    return null;
+  }
+
+  /// Fetch detailed Movie objects for arbitrary ids and return them.
+  Future<List<Movie>> fetchMoviesForIds(List<int> ids) async {
+    final List<Movie> out = [];
+    for (final id in ids) {
+      try {
+        final res = await apiService.getMovieDetails(id);
+        final list = _toMovieList(res);
+        if (list.isNotEmpty) out.add(list.first);
+      } catch (_) {
+        // ignore individual failures
+      }
+    }
+    return out;
   }
 }

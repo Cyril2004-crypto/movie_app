@@ -7,10 +7,17 @@ import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 
 class AuthProvider extends ChangeNotifier {
   late final Box _userBox;
+  late final Box _favoritesBox;
+  late final Box _watchlistBox;
   final GoogleSignIn _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
 
   AuthProvider() {
-    _userBox = Hive.box('user'); // ensure opened in main.dart
+    _userBox = Hive.box('user');
+    _favoritesBox = Hive.box('favorites');
+    _watchlistBox = Hive.box('watchlist');
+
+    final username = _userBox.get('username') as String?;
+    if (username != null) _migrateLegacyListsToUser(username); // ensure migration runs
   }
 
   bool get isLoggedIn => _userBox.get('loggedIn', defaultValue: false) as bool;
@@ -104,21 +111,25 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<bool> register(String username, String password) async {
-    final users = Map<String, String>.from(_userBox.get('users', defaultValue: <String, String>{}));
-    if (users.containsKey(username)) return false; // already exists
-    users[username] = _hash(password);
+    final usersRaw = _userBox.get('users', defaultValue: <String, String>{});
+    final users = Map<String, String>.from(usersRaw as Map);
+    final key = username;
+    if (users.containsKey(key)) return false; // already exists
+    users[key] = _hash(password);
     await _userBox.put('users', users);
 
-    // auto-login after register
+    // auto-login after register and ensure per-user lists exist
     await _userBox.put('loggedIn', true);
-    await _userBox.put('username', username);
+    await _userBox.put('username', key);
     await _userBox.put('provider', 'local');
+    await _ensurePerUserLists(key);
     notifyListeners();
     return true;
   }
 
   Future<bool> loginWithPassword(String username, String password) async {
-    final users = Map<String, String>.from(_userBox.get('users', defaultValue: <String, String>{}));
+    final usersRaw = _userBox.get('users', defaultValue: <String, String>{});
+    final users = Map<String, String>.from(usersRaw as Map);
     final stored = users[username];
     if (stored == null) return false; // no such user
     if (stored != _hash(password)) return false; // wrong password
@@ -126,6 +137,7 @@ class AuthProvider extends ChangeNotifier {
     await _userBox.put('loggedIn', true);
     await _userBox.put('username', username);
     await _userBox.put('provider', 'local');
+    await _ensurePerUserLists(username);
     notifyListeners();
     return true;
   }
@@ -157,11 +169,18 @@ class AuthProvider extends ChangeNotifier {
       final email = account.email;
       final photoUrl = account.photoUrl;
 
+      // prefer email as canonical username to avoid collisions; fallback to name
+      final canonical = (email ?? name ?? 'google_${DateTime.now().millisecondsSinceEpoch}').toString();
+
       await _userBox.put('loggedIn', true);
-      await _userBox.put('username', name ?? email);
+      await _userBox.put('username', canonical);
       await _userBox.put('email', email);
       await _userBox.put('avatar', photoUrl);
       await _userBox.put('provider', 'google');
+
+      // ensure per-user storage exists and migrate legacy lists
+      await _ensurePerUserLists(canonical);
+      await _migrateLegacyListsToUser(canonical);
 
       notifyListeners();
       return true;
@@ -190,8 +209,10 @@ class AuthProvider extends ChangeNotifier {
         final email = userData['email'] as String?;
         final picture = (userData['picture']?['data']?['url']) as String?;
 
+        final canonical = (email ?? name ?? 'facebook_${DateTime.now().millisecondsSinceEpoch}').toString();
+
         await _userBox.put('loggedIn', true);
-        await _userBox.put('username', name ?? email ?? 'FacebookUser');
+        await _userBox.put('username', canonical);
         await _userBox.put('email', email);
         await _userBox.put('avatar', picture);
         await _userBox.put('provider', 'facebook');
@@ -209,9 +230,16 @@ class AuthProvider extends ChangeNotifier {
 
   Future<bool> signInWithApple() async {
     try {
+      // when real Apple sign-in is implemented extract email/name from credential
+      // for now generate a stable unique key if email not available
+      final generated = 'apple_${DateTime.now().millisecondsSinceEpoch}';
+      final canonical = generated; // replace with email or id once available
+
       await _userBox.put('loggedIn', true);
-      await _userBox.put('username', 'AppleUser');
+      await _userBox.put('username', canonical);
       await _userBox.put('provider', 'apple');
+
+      await _migrateLegacyListsToUser(canonical); // <--- migrate here
       notifyListeners();
       return true;
     } catch (e, st) {
@@ -265,4 +293,137 @@ class AuthProvider extends ChangeNotifier {
       return <String, String>{};
     }
   }
+
+  void debugDumpLists() {
+    debugPrint('username=${_userBox.get('username')}');
+    debugPrint('favorites.byUser=${_favoritesBox.get('byUser')}');
+    debugPrint('favorites.ids=${_favoritesBox.get('ids')}');
+    debugPrint('watchlist.byUser=${_watchlistBox.get('byUser')}');
+    debugPrint('watchlist.ids=${_watchlistBox.get('ids')}');
+  }
+
+  // --- per-user favorites/watchlist helpers ---
+
+  // Return favorites for current signed-in user (movie ids)
+  List<int> get currentFavorites {
+    final username = (_userBox.get('username') as String?)?.toLowerCase();
+    if (username == null) return <int>[];
+    return _getListFromBoxForUser(_favoritesBox, username);
+  }
+
+  // Return watchlist for current signed-in user (movie ids)
+  List<int> get currentWatchlist {
+    final username = (_userBox.get('username') as String?)?.toLowerCase();
+    if (username == null) return <int>[];
+    return _getListFromBoxForUser(_watchlistBox, username);
+  }
+
+  Future<void> toggleFavorite(int movieId) async {
+    final username = (_userBox.get('username') as String?)?.toLowerCase();
+    if (username == null) return;
+    final map = Map<String, dynamic>.from(_favoritesBox.get('byUser', defaultValue: <String, List<int>>{}) as Map);
+    final list = List<int>.from((map[username] as List?) ?? <int>[]);
+    if (list.contains(movieId)) list.remove(movieId); else list.add(movieId);
+    map[username] = list;
+    await _favoritesBox.put('byUser', map);
+    notifyListeners();
+  }
+
+  Future<void> toggleWatchlist(int movieId) async {
+    final username = (_userBox.get('username') as String?)?.toLowerCase();
+    if (username == null) return;
+    final map = Map<String, dynamic>.from(_watchlistBox.get('byUser', defaultValue: <String, List<int>>{}) as Map);
+    final list = List<int>.from((map[username] as List?) ?? <int>[]);
+    if (list.contains(movieId)) list.remove(movieId); else list.add(movieId);
+    map[username] = list;
+    await _watchlistBox.put('byUser', map);
+    notifyListeners();
+  }
+
+  // helper: keep a single canonical _getListFromBoxForUser in this file
+  List<int> _getListFromBoxForUser(Box box, String username) {
+    final raw = box.get('byUser', defaultValue: <String, List<int>>{});
+    try {
+      final m = Map.from(raw as Map);
+      final v = m[username];
+      if (v == null) return <int>[];
+      return List<int>.from((v as List).map((e) => int.tryParse(e.toString()) ?? 0).where((i) => i != 0));
+    } catch (_) {
+      return <int>[];
+    }
+  }
+
+  List<int> _normalizeToIntList(dynamic raw) {
+    if (raw == null) return <int>[];
+    if (raw is List) {
+      return raw.map((e) => int.tryParse(e.toString()) ?? 0).where((i) => i != 0).toList();
+    }
+    if (raw is String) {
+      try {
+        final parsed = jsonDecode(raw);
+        if (parsed is List) return parsed.map((e) => int.tryParse(e.toString()) ?? 0).where((i) => i != 0).toList();
+      } catch (_) {}
+    }
+    return <int>[];
+  }
+
+// --- internal helpers to store per-user lists under a single key 'byUser' ---
+  Future<void> _putListToBoxForUser(Box box, String username, List<int> list) async {
+    final raw = box.get('byUser', defaultValue: <String, List<int>>{});
+    final Map<String, dynamic> m = Map<String, dynamic>.from(raw as Map);
+    final key = username.toLowerCase(); // canonical key
+    m[key] = list;
+    await box.put('byUser', m);
+  }
+
+  /// Migrate legacy top-level favorites/watchlist into per-user 'byUser' maps.
+  Future<void> _migrateLegacyListsToUser(String username) async {
+    final key = username.toLowerCase();
+
+    // migrate favorites
+    final legacyFav = _favoritesBox.get('ids') ?? _favoritesBox.get(username) ?? _favoritesBox.get('favorites');
+    final favList = _normalizeToIntList(legacyFav);
+    final rawFavMap = _favoritesBox.get('byUser', defaultValue: <String, List<int>>{});
+    final favMap = Map<String, dynamic>.from(rawFavMap as Map);
+    if (favList.isNotEmpty && (favMap[key] == null || (favMap[key] as List).isEmpty)) {
+      favMap[key] = favList;
+      await _favoritesBox.put('byUser', favMap);
+    }
+
+    // migrate watchlist
+    final legacyWatch = _watchlistBox.get('ids') ?? _watchlistBox.get(username) ?? _watchlistBox.get('watchlist');
+    final watchList = _normalizeToIntList(legacyWatch);
+    final rawWatchMap = _watchlistBox.get('byUser', defaultValue: <String, List<int>>{});
+    final watchMap = Map<String, dynamic>.from(rawWatchMap as Map);
+    if (watchList.isNotEmpty && (watchMap[key] == null || (watchMap[key] as List).isEmpty)) {
+      watchMap[key] = watchList;
+      await _watchlistBox.put('byUser', watchMap);
+    }
+
+    notifyListeners();
+  }
+
+  // Ensure the 'byUser' maps contain an entry for this username
+  Future<void> _ensurePerUserLists(String username) async {
+    final key = username.toLowerCase();
+
+    // favorites
+    final rawFav = _favoritesBox.get('byUser', defaultValue: <String, List<int>>{}) as Map;
+    final favMap = Map<String, dynamic>.from(rawFav);
+    if (favMap[key] == null) {
+      favMap[key] = <int>[];
+      await _favoritesBox.put('byUser', favMap);
+    }
+
+    // watchlist
+    final rawWatch = _watchlistBox.get('byUser', defaultValue: <String, List<int>>{}) as Map;
+    final watchMap = Map<String, dynamic>.from(rawWatch);
+    if (watchMap[key] == null) {
+      watchMap[key] = <int>[];
+      await _watchlistBox.put('byUser', watchMap);
+    }
+  }
+
+  // Ensure UI is consistent after login/register/social sign-in:
+  // call notifyListeners() so UI can read currentFavorites/currentWatchlist
 }

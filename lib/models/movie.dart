@@ -2,27 +2,37 @@ class Movie {
   final int id;
   final String title;
   final String? posterPath;
-  final String overview;
   final String? releaseDate;
   final double voteAverage;
 
   Movie({
     required this.id,
     required this.title,
-    required this.posterPath,
-    required this.overview,
-    required this.releaseDate,
+    this.posterPath,
+    this.releaseDate,
     required this.voteAverage,
   });
 
   factory Movie.fromJson(Map<String, dynamic> json) {
+    int parseInt(dynamic v) {
+      if (v == null) return 0;
+      if (v is int) return v;
+      return int.tryParse(v.toString()) ?? 0;
+    }
+
+    double parseDouble(dynamic v) {
+      if (v == null) return 0.0;
+      if (v is double) return v;
+      if (v is int) return v.toDouble();
+      return double.tryParse(v.toString()) ?? 0.0;
+    }
+
     return Movie(
-      id: json['id'] as int,
-      title: json['title'] as String? ?? 'Untitled',
-      posterPath: json['poster_path'] as String?,
-      overview: json['overview'] as String? ?? '',
-      releaseDate: json['release_date'] as String?,
-      voteAverage: (json['vote_average'] as num?)?.toDouble() ?? 0.0,
+      id: parseInt(json['id']),
+      title: (json['title'] ?? json['name'] ?? '').toString(),
+      posterPath: json['poster_path']?.toString(),
+      releaseDate: json['release_date']?.toString(),
+      voteAverage: parseDouble(json['vote_average'] ?? json['rating']),
     );
   }
 }
